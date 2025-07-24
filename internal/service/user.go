@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"github/zine0/IM/internal/repository"
 	"github/zine0/IM/pkg/utils"
 	"net/http"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/spf13/viper"
 )
 
 type UserService struct {
@@ -42,11 +42,7 @@ func (s *UserService) CreateUser(ctx *gin.Context) {
 		return
 	}
 
-	exists, err := s.checkUserExists(req.Username)
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"msg": "error"})
-		return
-	}
+	_, exists := s.checkUserExists(req.Username)
 	if exists {
 		ctx.JSON(http.StatusOK, gin.H{"msg": "username is exists"})
 		return
@@ -58,8 +54,7 @@ func (s *UserService) CreateUser(ctx *gin.Context) {
 		return
 	}
 
-	fmt.Printf("%+v\n",req)
-	err = s.db.CreateUser(context.Background(), repository.CreateUserParams{
+	id,err := s.db.CreateUser(context.Background(), repository.CreateUserParams{
 		Username:  pgtype.Text{String: req.Username,Valid: true},
 		Password:  pgtype.Text{String: hashedPassword,Valid: true},
 		CreatedAt: pgtype.Timestamp{Time: time.Now(),Valid: true},
@@ -69,16 +64,61 @@ func (s *UserService) CreateUser(ctx *gin.Context) {
 		return
 	}
 
+	token,err := utils.GenerateJWT(req.Username,int(id),viper.GetStringMapString("app")["key"])
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError,gin.H{
+			"msg":"error",
+		})
+	}
+
 	ctx.JSON(
 		http.StatusOK,
-		gin.H{"msg": "success"},
+		gin.H{"msg": "success","token":token},
 	)
 }
 
-func (s *UserService) checkUserExists(username string) (bool, error) {
-	exists, err := s.db.UserExists(context.Background(), pgtype.Text{String: username,Valid: true})
-	if err != nil {
-		return false, nil
+type userLogin struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+func (s *UserService) Login(ctx *gin.Context) {
+	req := &userLogin{}
+	if err := ctx.ShouldBindJSON(req);err!=nil {
+		ctx.JSON(http.StatusBadRequest,gin.H{"msg":"bad request"})
+		return
 	}
-	return exists, nil
+
+	user,exists := s.checkUserExists(req.Username)
+
+	if !exists {
+		ctx.JSON(http.StatusBadRequest,gin.H{"msg":"no such user"})
+		return
+	}
+
+	ok := utils.CheckPassword(user.Password.String,req.Password)
+	if !ok {
+		ctx.JSON(http.StatusOK,gin.H{"msg":"password error"})
+		return
+	}
+
+	token,err := utils.GenerateJWT(user.Username.String,int(user.ID),viper.GetStringMapString("app")["key"])
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError,gin.H{"msg":"error"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK,gin.H{
+		"msg":"success",
+		"token":token,
+	})
+
+}
+
+func (s *UserService) checkUserExists(username string) (repository.User, bool) {
+	user, err := s.db.UserExists(context.Background(), pgtype.Text{String: username,Valid: true})
+	if err != nil {
+		return repository.User{}, false
+	}
+	return user, true
 }

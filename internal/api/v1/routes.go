@@ -16,4 +16,5 @@ func SetupUserRoutes(r *gin.RouterGroup,db *repository.Queries) {
 	userRoutes := r.Group("/user")
 
 	userRoutes.POST("/create",s.CreateUser)
+	userRoutes.POST("/login",s.Login)
 }

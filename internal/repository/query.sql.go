@@ -11,9 +11,10 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const createUser = `-- name: CreateUser :exec
+const createUser = `-- name: CreateUser :one
 insert into "user" (username,password,created_at)
 values ($1,$2,$3)
+returning id
 `
 
 type CreateUserParams struct {
@@ -22,9 +23,11 @@ type CreateUserParams struct {
 	CreatedAt pgtype.Timestamp `json:"created_at"`
 }
 
-func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) error {
-	_, err := q.db.Exec(ctx, createUser, arg.Username, arg.Password, arg.CreatedAt)
-	return err
+func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (int32, error) {
+	row := q.db.QueryRow(ctx, createUser, arg.Username, arg.Password, arg.CreatedAt)
+	var id int32
+	err := row.Scan(&id)
+	return id, err
 }
 
 const deleteUser = `-- name: DeleteUser :exec
@@ -44,14 +47,20 @@ func (q *Queries) DeleteUser(ctx context.Context, arg DeleteUserParams) error {
 }
 
 const userExists = `-- name: UserExists :one
-SELECT EXISTS(
-    SELECT 1 FROM "user" WHERE username = $1
-) AS exists
+SELECT id, username, password, avatar, created_at, deleted_at FROM "user" 
+WHERE username = $1
 `
 
-func (q *Queries) UserExists(ctx context.Context, username pgtype.Text) (bool, error) {
+func (q *Queries) UserExists(ctx context.Context, username pgtype.Text) (User, error) {
 	row := q.db.QueryRow(ctx, userExists, username)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.Password,
+		&i.Avatar,
+		&i.CreatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
 }
