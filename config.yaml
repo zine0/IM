@@ -4,3 +4,7 @@ db:
   user: "zineyu"
   password: "zineyu"
   database: "database"
+
+
+app:
+  key: "zineyu"
