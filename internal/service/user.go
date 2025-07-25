@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/spf13/viper"
+	"go.uber.org/zap"
 )
 
 type UserService struct {
@@ -112,6 +113,11 @@ func (s *UserService) Login(ctx *gin.Context) {
 		"msg":"success",
 		"token":token,
 	})
+
+	zap.L().Info(
+		"user login",
+		zap.String("user",req.Username),
+	)
 
 }
 
