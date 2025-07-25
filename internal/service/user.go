@@ -35,23 +35,27 @@ func (s *UserService) CreateUser(ctx *gin.Context) {
 
 	if err := ctx.ShouldBindJSON(req); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"msg": "bad request"})
+		zap.L().Info("bad request, unable to bind json")
 		return
 	}
 
 	if req.Password != req.ConfirmPassword {
 		ctx.JSON(http.StatusBadRequest, gin.H{"msg": "两次输入的密码不同"})
+		zap.L().Info("两次输入的密码不同")
 		return
 	}
 
 	_, exists := s.checkUserExists(req.Username)
 	if exists {
 		ctx.JSON(http.StatusOK, gin.H{"msg": "username is exists"})
+		zap.L().Info("username is exists")
 		return
 	}
 
 	hashedPassword, err := utils.HashPassword(req.Password)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"msg": "error"})
+		zap.L().Error("unable to get hashed password")
 		return
 	}
 
@@ -62,6 +66,7 @@ func (s *UserService) CreateUser(ctx *gin.Context) {
 	})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"msg": "error"})
+		zap.L().Error("can't create user",zap.String("error",err.Error()))
 		return
 	}
 
@@ -70,12 +75,16 @@ func (s *UserService) CreateUser(ctx *gin.Context) {
 		ctx.JSON(http.StatusInternalServerError,gin.H{
 			"msg":"error",
 		})
+
+		zap.L().Error("can't get JWT Token",zap.String("error",err.Error()))
 	}
 
 	ctx.JSON(
 		http.StatusOK,
 		gin.H{"msg": "success","token":token},
 	)
+
+	zap.L().Info("success to create user")
 }
 
 type userLogin struct {
